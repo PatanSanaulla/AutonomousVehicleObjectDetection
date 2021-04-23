@@ -151,6 +151,7 @@ def detectOBI(image):
     
     if len(contours) == 0:
         print('No block found')
+        #pivotleft(45) #rotate left for 45 degrees
     else:
         c = max(contours, key=cv2.contourArea)
         ((X,Y), radius) = cv2.minEnclosingCircle(c)
@@ -185,7 +186,7 @@ time.sleep(0.1)
 
 # define the codec and create VideoWriter object
 fourcc = cv2.VideoWriter_fourcc(*'XVID')
-out = cv2.VideoWriter('trackblock.avi', fourcc, 10, (640, 480))
+out = cv2.VideoWriter('trackblock_green.avi', fourcc, 10, (640, 480))
 # write frame to video file
 
 # keep looping
