@@ -32,6 +32,104 @@ def gameover():
     gpio.output(37, False)
     gpio.cleanup()
     
+def pivotright(angle):
+    init()
+    offset = 1 #degrees
+    counterBR = np.uint64(0)
+    counterFL = np.uint64(0)
+
+    buttonBR = int(0)
+    buttonFL = int(0)
+
+    # Initialize pwm signal to control motor
+    pwm1 = gpio.PWM(31, 50) #Right side
+    pwm2 = gpio.PWM(35, 50) #Left side
+    val = 35
+    pwm1.start(val)
+    pwm2.start(val)
+    time.sleep(0.1)
+    
+    if ser.in_waiting > 0:
+        line = ser.readline() #print(line)
+        line = line.rstrip().lstrip()
+        line = str(line)
+        line = line.strip("'")
+        line = line.strip("b'")
+        goalAngle = (float(line) + angle)%360
+
+
+    while True:
+        #Read serial stream
+        line = ser.readline() #print(line)
+        line = line.rstrip().lstrip()
+        line = str(line)
+        line = line.strip("'")
+        line = line.strip("b'")
+        currAngle = float(line)
+       
+        if int(gpio.input(12)) != int(buttonBR):
+            buttonBR = int(gpio.input(12))
+            counterBR += 1
+            
+        if int(gpio.input(7)) != int(buttonFL):
+            buttonFL = int(gpio.input(7))
+            counterFL += 1
+
+        if currAngle+offset >= goalAngle and currAngle-offset <= goalAngle:
+            pwm1.stop()
+            pwm2.stop()
+            gameover()
+            break
+
+
+def pivotleft(angle):
+    init()
+    offset = 1 #degrees
+    counterBR = np.uint64(0)
+    counterFL = np.uint64(0)
+
+    buttonBR = int(0)
+    buttonFL = int(0)
+
+    # Initialize pwm signal to control motor
+    pwm1 = gpio.PWM(33, 50) #Right side
+    pwm2 = gpio.PWM(37, 50) #Left side
+    val = 35
+    pwm1.start(val)
+    pwm2.start(val)
+    time.sleep(0.1)
+    
+    if ser.in_waiting > 0:
+        line = ser.readline() 
+        line = line.rstrip().lstrip()
+        line = str(line)
+        line = line.strip("'")
+        line = line.strip("b'")
+        goalAngle = (float(line) - angle)%360
+
+    while True:
+        line = ser.readline() 
+        line = line.rstrip().lstrip()
+        line = str(line)
+        line = line.strip("'")
+        line = line.strip("b'")
+        currAngle = float(line)
+        
+        if int(gpio.input(12)) != int(buttonBR):
+            buttonBR = int(gpio.input(12))
+            counterBR += 1
+            
+        if int(gpio.input(7)) != int(buttonFL):
+            buttonFL = int(gpio.input(7))
+            counterFL += 1
+
+        if currAngle+offset >= goalAngle and currAngle-offset <= goalAngle:
+            pwm1.stop()
+            pwm2.stop()
+            gameover()
+            break
+        
+
 def detectOBI(image):
     height = (image.shape[0])
     width = (image.shape[1])
@@ -61,13 +159,18 @@ def detectOBI(image):
         
         cv2.putText(image, '('+str(X)+','+str(Y)+')', (20, 20),cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 255, 0), 2)
         degrees = 0
+        if(X >= 318 and X <=322):
+            return image #within the zone
+        
         if(X < centerX):
             #rotate left
             degrees = (320 - X)*0.061
+            pivotleft(degrees)
         else:
             #rotate right
             degrees = (640 - X)*0.061
-      
+            pivotright(degrees)
+            
     return image
     
 #cv2.drawContours(image, contours
@@ -85,9 +188,6 @@ fourcc = cv2.VideoWriter_fourcc(*'XVID')
 out = cv2.VideoWriter('trackblock.avi', fourcc, 10, (640, 480))
 # write frame to video file
 
-#to write time delta in a file
-#file = open('hw4data.txt','a')
-
 # keep looping
 for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=False):
     # grab the current frame
@@ -101,18 +201,13 @@ for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=
     
     # show the frame to our screen
     cv2.imshow("Frame", processedImage)
-    
-    #end = datetime.datetime.now()
-    #delta = end - start
-    #print(str(delta))
-    
-    #file.write(str(delta.total_seconds())+'\n')
-    
+       
     key = cv2.waitKey(1) & 0xFF
     # clear the stream in preparation for the next frame
     rawCapture.truncate(0)
     # press the 'q' key to stop the video stream
     if key == ord("q"):
+        gameover()
         break
     
 #cv2.waitKey(0)
