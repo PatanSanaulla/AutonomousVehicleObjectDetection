@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import imutils
+from datetime import datetime
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 import time
@@ -9,10 +10,12 @@ import RPi.GPIO as gpio
 import os
 import math
 import serial
+import emailIntegration as EMAIL
 
 #Indentify serial communication
 ser = serial.Serial('/dev/ttyUSB0', 9600)
 
+forwardCount = 0
 ##### INit the pins
 def init():
     gpio.setmode(gpio.BOARD)
@@ -49,7 +52,8 @@ def closeGripper():
             break
     pwm.stop()
     #clear the output pins
-    gameover() 
+    gpio.output(36, False)
+    gpio.cleanup()
 
 def openGripper():
     gpio.setmode(gpio.BOARD)
@@ -68,7 +72,8 @@ def openGripper():
             break
     pwm.stop()
     #clear the output pins
-    gameover()
+    gpio.output(36, False)
+    gpio.cleanup()
     
 def forward(maxTicks):
     init()
@@ -119,6 +124,57 @@ def forward(maxTicks):
             #file.write(str(currAngle)+'\n')
             #file.write(str(currAngle)+','+str(maxTicks/98)+'\n')
             break
+        
+def reverse(maxTicks):
+    init()
+    counterBR = np.uint64(0)
+    counterFL = np.uint64(0)
+
+    buttonBR = int(0)
+    buttonFL = int(0)
+
+    # Initialize pwm signal to control motor
+    pwm1 = gpio.PWM(33, 50) #Right side
+    pwm2 = gpio.PWM(35, 50) #Left side
+    val = 40
+    pwm1.start(val)
+    pwm2.start(val)
+    time.sleep(0.1)
+
+
+    while True:
+        if int(gpio.input(12)) != int(buttonBR):
+            buttonBR = int(gpio.input(12))
+            counterBR += 1
+            
+        if int(gpio.input(7)) != int(buttonFL):
+            buttonFL = int(gpio.input(7))
+            counterFL += 1
+            
+        if counterBR >= maxTicks:
+            pwm2.stop()
+            
+        if counterFL >= maxTicks:
+            pwm1.stop()
+            
+        if counterFL >= maxTicks and counterBR >= maxTicks:
+            pwm1.stop()
+            pwm2.stop()
+            gameover()
+            #Read serial stream
+            #line = ser.readline() #print(line)
+            #line = line.rstrip().lstrip()
+            #line = str(line)
+            #line = line.strip("'")
+            #line = line.strip("b'")
+            #print(line)
+        
+            #Return float
+            #currAngle = float(line)
+            #file.write(str(currAngle)+'\n')
+            #file.write(str(currAngle)+','+str(maxTicks/98)+'\n')
+            break
+
     
 def pivotright(angle):
     init()
@@ -219,6 +275,7 @@ def pivotleft(angle):
         
 
 def detectOBI(image):
+    global forwardCount
     height = (image.shape[0])
     width = (image.shape[1])
     
@@ -251,8 +308,14 @@ def detectOBI(image):
         if(X > 315 and X < 325):
             if radius*2 > 400: #the object is close to the gripper
                 closeGripper() #
+                pic_time = 'pickedObject'#datetime.now().strftime('%Y%m%d%H%M%S')
+                cv2.imwrite(pic_time+'.jpg', image)
+                EMAIL.sendEmail(pic_time)
+                reverse(forwardCount)
+                forwardCount = 0
             else:
                 forward(5)
+                forwardCount += 5
              #   openGripper()
             return image #within the zone
         
@@ -279,7 +342,7 @@ time.sleep(0.1)
 
 # define the codec and create VideoWriter object
 fourcc = cv2.VideoWriter_fourcc(*'XVID')
-out = cv2.VideoWriter('trackblock.avi', fourcc, 10, (640, 480))
+out = cv2.VideoWriter('trackblockandretrive.avi', fourcc, 10, (640, 480))
 # write frame to video file
 
 # keep looping
